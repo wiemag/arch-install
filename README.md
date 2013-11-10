@@ -26,15 +26,24 @@ However, they may be treated as a check list for arch linux installation or a ba
 USAGE
 
 - download a given script from here
+
 	curl -o arinst-1-lang.sh -L https://raw.github.com/wiemag/arch-install/master/arinst-1-lang.sh
 	curl -o arinst-2-raid.sh -L https://raw.github.com/wiemag/arch-install/master/arinst-2-raid.sh
+
 - change permissions for the script to be exwcutable
+
 	chmod a+x arinst-*
+
 - run them with "-h" flag first to see available options
+
 	./arinst-1-lang.sh -h
-	or through bash
+
+or through bash
+
 	bash arch-1-lang.sh -h
+
 - run them with chosen options, e.g.
+
 	bash arinst-1-lang.sh -k pl -f lat2-16 -l pl_PL.UTF-8
 
 AT THE MOMENT NONE SCRIPT WORKS!!! 

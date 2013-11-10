@@ -63,12 +63,12 @@ echo -e "\tAvailable 'sd' disks:  \e[1m${DISKS}\e[0m\n"
 #	echo -e "\t\tunless you know what you are doing.\e[0m\n"
 #fi
 
-NODR=3 							# Just for testing
-NODA=5 							# Just for testing
-DISKS="sda sdb sdc sdd sde" 	# Just for testing
-echo Testing NODR=$NODR
-echo Testing NODA=$NODA
-echo Testing DISKS=$DISKS
+#NODR=3 							# Just for testing
+#NODA=5 							# Just for testing
+#DISKS="sda sdb sdc sdd sde" 	# Just for testing
+#echo Testing NODR=$NODR
+#echo Testing NODA=$NODA
+#echo Testing DISKS=$DISKS
 
 
 if [[ $NODA -lt $NODR ]]; then
@@ -144,25 +144,27 @@ fi
 echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo NOT)\e[0m in (U)EFI environment."
 
 
-#---INSTALL GPTFDISK IN NECESSARY------------------------------
+#---INSTALL GPTFDISK IN NECESSARY (should be already there)----
 # Install gptfdisk if necessary. (Provides gdisk, cgdisk, sgdisk, fixparts)
 which sgdisk 2>/dev/null 1>/dev/null
 (( $? )) && { echo -e "\tThe gptfdisk package needs to be installed."; 
-	echo -e "\t\e[1mTesting message:\e[0m  sudo pacman -Sy gptfdisk"; 
-	(( $? )) && { echo "Aborted!"; exit 23;} ; }
+	sudo pacman -Sy gptfdisk;
+	(( $? )) && { echo "Aborted!"; exit 23;}; }
 
-exit 	# Testing
 
+#---CREATING GPT DISK(s) (Both for EFI and MBR)----------------
 echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo "."
 # Remove previous GPT/MBR data and set alignment.
 # Using "/dev/sd[abc] is not possible.
 for DEV in $CHOSEN; do
-	sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
-	sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
+	echo sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
+	echo sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
 done 								# In fact, 2048 is the default
 
-# Create "EFI" partition (512MiB, vfat, label EFI)
-sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
+#---Create "EFI" partition (512MiB, vfat, label EFI)-----------
+echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
+
+exit 	# Testing
 
 # Create partitions for encrypted RAID5. Beware of partition numbers.
 # It is possible to clone partitions with sgdisk (--backup/--load-backup)
