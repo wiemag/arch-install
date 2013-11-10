@@ -162,8 +162,16 @@ for DEV in $CHOSEN; do
 done 								# In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
-echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
+if [[ EFI == 1 ]]
+	DEV=${CHOSEN%% *}
+	echo "Creating a 512-MB EFI partition on ${DEV}."
+	[[ $DEV != "sda" ]] && 
+		echo -e "\e[1mWarning!\e[0m The EFI partition should be on /dev/sda."
+	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
+fi
 
+
+gdisk
 exit 	# Testing
 
 # Create partitions for encrypted RAID5. Beware of partition numbers.
