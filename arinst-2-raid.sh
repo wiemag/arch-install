@@ -33,7 +33,8 @@ case $RAID in
 	1) NODR=2;; 		# No of disks required for RAID 1
 	?) usage_raid; echo -e "\nRAID 5 or RAID 1 only"; exit 2
 esac
-EFI=0 					# Is it going to be an EFI setup?
+EFI=0 					# Is it going to be an EFI setup? 
+ 						# Checked later and modified accordingly.
 
 function wipe_disks () { true;
 		#dd if=/dev/urandom of=$DEV
@@ -134,7 +135,7 @@ if [[ $WIPE -gt 0 ]]; then
 		echo -e "Wiping ${DEV}..."
 		echo -e "\e[1mNOT REALLY. Just joking! Wipe 'em manually!\e[0m"
 	done;
-	echo -e "Disk(s) cleaned."
+	echo -e "Disk(s) cleaned.\n"
 fi
 
 
@@ -162,7 +163,7 @@ for DEV in $CHOSEN; do
 done 								# In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
-if [[ EFI == 1 ]]
+if [[ EFI == 1 ]]; then
 	DEV=${CHOSEN%% *}
 	echo "Creating a 512-MB EFI partition on ${DEV}."
 	[[ $DEV != "sda" ]] && 
