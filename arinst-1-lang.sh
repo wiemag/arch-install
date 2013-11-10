@@ -24,26 +24,25 @@ echo -e "\t     Availavle encodings are listed in '/etc/locale.gen'.\n"
 }
 
 [[ $# < 1 ]] && { usage_arinst-1-lang; 
-echo -e "\tNo change in the default settings.\n";
-	exit;}
+	echo -e "\tNo change in the default settings.\n"; exit;}
 
 while getopts  ":k:f:l:hv?" flag
 do
     case "$flag" in
 		h|v) usage_arinst-1-lang && exit;;
 		k) KB="$OPTARG";
-			[[ -z $(ls /usr/share/kbd/keymaps/i386/*/${KB}.map.gz 2>/dev/null) ]] && \
-				{ usage; echo -e "\tKeyboard layout \e[1m${KB}\e[0m not found.\n"; exit;} || \
+			[[ -z $(ls /usr/share/kbd/keymaps/i386/*/${KB}.map.gz 2>/dev/null) ]] && 
+				{ usage; echo -e "\tKeyboard layout \e[1m${KB}\e[0m not found.\n"; exit;} || 
 				loadkeys $KB 1>/dev/null;;
 		f) FONT="$OPTARG";
-			[[ ! -f /usr/share/kbd/consolefonts/${FONT}.psfu.gz ]] && \
+			[[ ! -f /usr/share/kbd/consolefonts/${FONT}.psfu.gz ]] && 
 				{ usage_arinst-1-lang; 
 					echo -e "\tFont \e[1m${FONT}\e[0m does not exist.\n"; exit;};;
 		l) LOCALE="$OPTARG";
-			[[ -z $(grep "$LOCALE" /etc/locale.gen) ]] && \
+			[[ -z $(grep "$LOCALE" /etc/locale.gen) ]] && 
 				{ usage_arinst-1-lang; 
 					echo -e "\tLocale \e[1m${LOCALE}\e[0m not listed in /etc/locale.gen.\n"; 
-					exit;} || \
+					exit;} || 
 				{ sed -i s/#"$LOCALE"/"$LOCALE"/ /etc/locale.gen;
 					#export LANG=${LOCALE%% *}; 
 					locale-gen 1>/dev/null; } ;;
@@ -81,12 +80,3 @@ fi
 [[ -d /sys/firmware/efi ]] && EFI=1
 echo -e "($((++i)))\tYou are \e[1m$([[ $EFI = 0 ]] && echo NOT)\e[0m in (U)EFI environment."
 
-#---OPTIONAL: ZERO THE DRIVE---(Go have a cup of coffee)-------
-echo -en "($((++i)))\tWipe the drive:  Are you sure you want to do it? (y/N) "
-Q="N"
-read -e -n1 -t120 Q
-if [[ "$Q" == [yY] ]]; then
-	echo -e "\tThen go and have a cup of coffee."
-##	dd if=/dev/urandom of=/dev/sda
-	echo -e "\tDisk cleaned."
-fi

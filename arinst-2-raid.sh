@@ -144,24 +144,22 @@ fi
 echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo NOT)\e[0m in (U)EFI environment."
 
 
-#---CREATE PARTITION TABLE: GPT--------------------------------
-echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo "."
+#---INSTALL GPTFDISK IN NECESSARY------------------------------
 # Install gptfdisk if necessary. (Provides gdisk, cgdisk, sgdisk, fixparts)
-which gptfdisk 2>&1 1>/dev/null
-(( $? )) && { echo -e "\t The gptfdisk package needs to be installed."; 
-	echo -e "\tsudo pacman -Sy gptfdisk"; 
+which sgdisk 2>/dev/null 1>/dev/null
+(( $? )) && { echo -e "\tThe gptfdisk package needs to be installed."; 
+	echo -e "\t\e[1mTesting message:\e[0m  sudo pacman -Sy gptfdisk"; 
 	(( $? )) && { echo "Aborted!"; exit 23;} ; }
 
 exit 	# Testing
 
+echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo "."
 # Remove previous GPT/MBR data and set alignment.
 # Using "/dev/sd[abc] is not possible.
-sgdisk -Z /dev/sda 				# Destroy MBR and GPT data (clean the disk)
-sgdisk -Z /dev/sdb
-sgdisk -Z /dev/sdc
-sgdisk -a 2048 -o /dev/sda 		# Clear out all partition data
-sgdisk -a 2048 -o /dev/sdb 		# -a sets alignment
-sgdisk -a 2048 -o /dev/sdc 		# In fact, 2048 is the default
+for DEV in $CHOSEN; do
+	sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
+	sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
+done 								# In fact, 2048 is the default
 
 # Create "EFI" partition (512MiB, vfat, label EFI)
 sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
