@@ -171,9 +171,19 @@ if [[ EFI == 1 ]]; then
 	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
 fi
 
+# Testing
+for DEV in $CHOSEN; do
+	gdisk -l /dev/${DEV}
+done
+echo "--------------------"
+for DEV in $CHOSEN; do
+	sgdisk -p /dev/${DEV}
+done
 
-gdisk
 exit 	# Testing
+
+# INTERACTIVE OR USE A MANUALLY EDITED .conf?
+# REMEMBER EFI PARTITION ON THE FIRST DISK.
 
 # Create partitions for encrypted RAID5. Beware of partition numbers.
 # It is possible to clone partitions with sgdisk (--backup/--load-backup)
@@ -182,9 +192,9 @@ sgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:RAID5 /dev/sdb
 sgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:RAID5 /dev/sdc
 
 # Check the partitions
-#sgdisk -p /dev/sda
-#sgdisk -p /dev/sdb
-#sgdisk -p /dev/sdc
+#for DEV in $CHOSEN; do
+#	sgdisk -p /dev/${DEV}
+#done
 
 # Prepare partitions for the creation of a RAID5 device
 modprobe raid5
