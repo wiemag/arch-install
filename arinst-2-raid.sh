@@ -182,6 +182,14 @@ if [[ $EFI == 1 ]]; then
 	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
 fi
 
+echo Free disk surface space for partitioning:
+echo There is a 0.5 GiB EFI partition on ${CHOSEN%% *}.
+for DEV in $CHOSEN; do
+	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
+	s=${x% *}; u=${x#* }
+	printf "\t%s: %10d %s\n" $DEV $s $u
+done
+
 exit 	# Testing
 
 # INTERACTIVE OR USE A MANUALLY EDITED .conf?
