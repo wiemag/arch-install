@@ -137,7 +137,7 @@ if [[ $WIPE -gt 0 ]]; then
 fi
 
 
-#---LAST WARNING BEFORE PARTITIONING (NO NEEDED IF WIPED)------
+#---LAST WARNING BEFORE PARTITIONING (NOT NEEDED IF WIPED)-----
 if [[ $WIPE -eq 0 ]]; then 		# No need to warn when disks have been wiped.
 	echo -e "The chosen disks (${CHOSEN}) are about to be partitioned."
 	for ((t=120;--t;)) {
@@ -203,9 +203,9 @@ modprobe raid5
 #modprobe dm-mod  # already there
 # mdadm --zero-superblock /dev/<drive>
 # partprobe -s  # verify 
-hdparm -W 0 /dev/sda  # Disable the disk write cache
-hdparm -W 0 /dev/sdb
-hdparm -W 0 /dev/sdc
+for DEV in $CHOSEN; do
+	hdparm -W 0 /dev/${DEV} 	# Disable the disk write cache
+done
 
 # Create a RAID5 device
 # -C = --create, -l = --level, -n = --raid-devices
