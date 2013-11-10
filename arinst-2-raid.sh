@@ -142,7 +142,7 @@ fi
 #---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
 #modprobe efivars
 [[ -d /sys/firmware/efi/efivars ]] && EFI=1
-echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo NOT)\e[0m in (U)EFI environment."
+echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment."
 
 
 #---INSTALL GPTFDISK IN NECESSARY (should be already there)----
@@ -163,22 +163,13 @@ for DEV in $CHOSEN; do
 done 								# In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
-if [[ EFI == 1 ]]; then
+if [[ $EFI == 1 ]]; then
 	DEV=${CHOSEN%% *}
-	echo "Creating a 512-MB EFI partition on ${DEV}."
+	echo -e "\nCreating a 512-MB EFI partition on ${DEV}."
 	[[ $DEV != "sda" ]] && 
 		echo -e "\e[1mWarning!\e[0m The EFI partition should be on /dev/sda."
 	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
 fi
-
-# Testing
-for DEV in $CHOSEN; do
-	gdisk -l /dev/${DEV}
-done
-echo "--------------------"
-for DEV in $CHOSEN; do
-	sgdisk -p /dev/${DEV}
-done
 
 exit 	# Testing
 
