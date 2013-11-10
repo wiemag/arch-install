@@ -51,7 +51,7 @@ function disks_available {
 }
 
 
-#--WIPING AVAILABLE DISKS: GPT--------------------------------
+#---INSTALLATION PARAMETRES-----------------------------------
 echo -e "\n\t\e[1mRAID type ${RAID}\e[0m"
 echo -e "\tNumber of disks required  = ${NODR}"
 x=$(disks_available)
@@ -59,10 +59,6 @@ NODA=${x%% *}
 DISKS=${x#* } 					# Available DISK device names
 echo -e "\tNumber of disks available = ${NODA}"
 echo -e "\tAvailable 'sd' disks:  \e[1m${DISKS}\e[0m\n"
-#if (( $(usb_in) )); then
-#	echo -e "\t\t\e[31;1mWarning. Remove usb pen drives and restart the script"
-#	echo -e "\t\tunless you know what you are doing.\e[0m\n"
-#fi
 
 #NODR=3 							# Just for testing
 #NODA=5 							# Just for testing
@@ -71,12 +67,13 @@ echo -e "\tAvailable 'sd' disks:  \e[1m${DISKS}\e[0m\n"
 #echo Testing NODA=$NODA
 #echo Testing DISKS=$DISKS
 
-
+#---NOT ENOUGH DISKS------------------------------------------
 if [[ $NODA -lt $NODR ]]; then
 	echo -e "\tToo few disks (just ${NODA}) for RAID type ${RAID}."
 	exit 21
 fi
 
+#---(MORE THAN) ENOUGH DISKS----------------------------------
 if [[ $NODA -gt $NODR ]]; then 		# Choose disks to be used by RAID
 	echo -e "Number of disks available is larger than that required."
 	for ((cont=1; ((cont)); )); do
@@ -118,6 +115,7 @@ fi
 #echo Testing CHOSEN=$CHOSEN 	# Just for testing
 #echo Testing NODC=$NODC 		# Just for testing
 
+#---WIPE CHOSEN DISKS (OPTIONAL)------------------------------
 if [[ $WIPE -gt 0 ]]; then
 	echo -ne "\e[31;1mWarning! The disk"
 	[[ $NODC -gt 1 ]] && echo 's are about to be wiped.' || echo -e ' is about to be wiped.'
@@ -139,10 +137,23 @@ if [[ $WIPE -gt 0 ]]; then
 fi
 
 
+#---LAST WARNING BEFORE PARTITIONING (NO NEEDED IF WIPED)------
+if [[ $WIPE -eq 0 ]]; then 		# No need to warn when disks have been wiped.
+	echo -e "The chosen disks (${CHOSEN}) are about to be partitioned."
+	for ((t=120;--t;)) {
+		echo -en "\rContinue?  (Y/n)  [\e[33m$t\e[0m sek] "
+		read -rsn1 -t1 Q && break
+	}
+	if [[ "$Q" != [yY] && "$Q" != "" ]]; then
+		echo -e "\rAborted.                   "
+		exit 23
+	fi
+fi
+
+
 #---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
-#modprobe efivars
 [[ -d /sys/firmware/efi/efivars ]] && EFI=1
-echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment."
+echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment.\n"
 
 
 #---INSTALL GPTFDISK IN NECESSARY (should be already there)----
@@ -160,7 +171,7 @@ echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo ".
 for DEV in $CHOSEN; do
 	echo sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
 	echo sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
-done 								# In fact, 2048 is the default
+done 									# in In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
 if [[ $EFI == 1 ]]; then
