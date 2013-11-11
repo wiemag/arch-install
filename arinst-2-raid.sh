@@ -169,30 +169,35 @@ echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo ".
 # Remove previous GPT/MBR data and set alignment.
 # Using "/dev/sd[abc] is not possible.
 for DEV in $CHOSEN; do
-	echo sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
-	echo sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
+	echo -e "\tsgdisk -Z /dev/${DEV}" 			# Destroy MBR and GPT data (clean the disk)
+	echo -e "\tsgdisk -a 2048 -o /dev/${DEV}" 	# Clear out all partition data; -a sets alignment
 done 									# in In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
+DEV0=${CHOSEN%% *}
 if [[ $EFI == 1 ]]; then
-	DEV=${CHOSEN%% *}
-	echo -e "\nCreating a 512-MB EFI partition on ${DEV}."
-	[[ $DEV != "sda" ]] && 
+	echo -e "\nCreating a 512-MB EFI partition on ${DEV0}."
+	[[ $DEV0 != "sda" ]] && 
 		echo -e "\e[1mWarning!\e[0m The EFI partition should be on /dev/sda."
-	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/sda
+	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0}
 fi
 
-echo Free disk surface space for partitioning:
-echo There is a 0.5 GiB EFI partition on ${CHOSEN%% *}.
+echo -e "\nFree disk-surface space for partitioning:"
+echo There is a 0.5 GiB EFI partition on ${DEV0}.
 for DEV in $CHOSEN; do
 	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
 	s=${x% *}; u=${x#* }
-	case u in
+	case u in 					# Convert into GiB
 		MiB) s=$(echo "$s / 1024" |bc);;
-		TiB) s=$(echo "$s * 2024" |bc);;
+		TiB) s=$(echo "$s * 1024" |bc);;
 	esac
+	[[ $DEV == $DEV0 ]] && { s=$(echo "$s - 0.5"|bc); s0=$s;}
 	printf "\t%s: %8.1f GiB\n" $DEV $s
+	SIZES=$SIZES"$DEV $s "
+	((s<s0)) && s0=$s 			# s0 is the smallest free disk-surface on the disks
 done
+echo "The samllest disk area for assembling RAID: \e[1m${s0} GiB\e[0m."
+echo "SIZES=(${SIZES})" 		# Testing
 
 exit 	# Testing
 
