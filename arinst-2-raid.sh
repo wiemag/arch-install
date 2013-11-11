@@ -15,6 +15,10 @@ echo -e "\tRAID_type defines the RAID type and defaults to 5."
 echo -e "\tFlag \"-w\" tells the script to wipe the disks before partitioning."
 }
 
+which bc 2>/dev/null 1>/dev/null
+(($?)) && { echo -e "Bash calculator is needed for this script to run.";
+	echo "Run:  pacman -Sy bc"; exit 29;}
+
 while getopts  "r:wh" flag
 do
 	case "$flag" in
@@ -194,7 +198,7 @@ for DEV in $CHOSEN; do
 	[[ $DEV == $DEV0 ]] && { s=$(echo "$s - 0.5"|bc); s0=$s;}
 	printf "\t%s: %8.1f GiB\n" $DEV $s
 	SIZES=$SIZES"$DEV $s "
-	(($s<$s0)) && s0=$s 			# s0 is the smallest free disk-surface on the disks
+	(($(echo "$s '<' $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
 done
 echo -e "The samllest disk area for assembling RAID: \e[1m${s0} GiB\e[0m."
 echo "SIZES=(${SIZES})" 		# Testing
