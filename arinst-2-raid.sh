@@ -187,7 +187,11 @@ echo There is a 0.5 GiB EFI partition on ${CHOSEN%% *}.
 for DEV in $CHOSEN; do
 	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
 	s=${x% *}; u=${x#* }
-	printf "\t%s: %10d %s\n" $DEV $s $u
+	case u in
+		MiB) s=$(echo "$s / 1024" |bc)
+		TiB) s=$(echo "$s * 2024" |bc)
+	esac
+	printf "\t%s: %8.1f GiB\n" $DEV $s
 done
 
 exit 	# Testing
