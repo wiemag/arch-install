@@ -187,15 +187,15 @@ if [[ $EFI == 1 ]]; then
 fi
 
 echo -e "\nFree disk-surface space for partitioning:"
-echo There is a 0.5 GiB EFI partition on ${DEV0}.
+((EFI)) && echo There is a 0.5 GiB EFI partition on ${DEV0}.
 for DEV in $CHOSEN; do
 	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
 	s=${x% *}; u=${x#* }
 	case u in 					# Convert into GiB
-		MiB) s=$(echo "$s / 1024" |bc);;
-		TiB) s=$(echo "$s * 1024" |bc);;
+		MiB) s=$(echo "scale=1; $s / 1024" |bc);;
+		TiB) s=$(echo "scale=1; $s * 1024" |bc);;
 	esac
-	[[ $DEV == $DEV0 ]] && { s=$(echo "$s - 0.5"|bc); s0=$s;}
+	[[ $DEV == $DEV0 ]] && { s=$(scale=1; echo "$s - $((EFI1?:0))/2"|bc); s0=$s;} # 0.5GiB
 	printf "\t%s: %8.1f GiB\n" $DEV $s
 	SIZES=$SIZES"$DEV $s "
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
