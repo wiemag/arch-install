@@ -2,8 +2,8 @@
 # by Wiesław Magusiak
 #
 
-VERSION=0.90
-f=${0%.sh} 				# CONF=${f}.conf
+VERSION=0.91
+#f=${0%.sh} 				# CONF=${f}.conf # If conf were to be used.
 
 function usage_raid () {
 echo -e "\n\e[32;1m${0##*/} (ver.$VERSION)\e[0m"
@@ -15,10 +15,16 @@ echo -e "\tRAID_type defines the RAID type and defaults to 5."
 echo -e "\tFlag \"-w\" tells the script to wipe the disks before partitioning."
 }
 
+#---INSTALL BASH CALCULATOR OR ABORT--------------------------
 which bc 2>/dev/null 1>/dev/null
-(($?)) && { echo -e "Bash calculator is needed for this script to run.";
-	echo "Run:  pacman -Sy bc"; exit 29;}
+(($?)) && { echo -e "\n\e[32;1m${0##*/} (ver.$VERSION)\e[0m"; 
+	echo "The script prepares disks for RAID and sets up RAID 5 or 1."
+	echo -e "\e[1mBash calculator is needed for this script to run.";
+	echo -e "Running:  pacman -Sy bc\e[0m";
+	pacman -Sy bc; (($?)) && { echo "Aborted."; exit 28;} || clear; }
 
+
+#---INSTALLATION PARAMETERS/OPTIONS---------------------------
 while getopts  "r:wh" flag
 do
 	case "$flag" in
@@ -30,6 +36,18 @@ done
 
 (( $# )) || usage_raid
 
+#---INFORMATION ON RAID LEVELS SUPPORTED BY THIS SCRIPT-------
+echo -e "\n\t*=====================================================*"
+echo -e "\t*   This script allows RAID 1 and RAID 5 only.        *"
+echo -e "\t*                                                     *"
+echo -e "\t*   \e[1mRAID 1\e[0m:  \e[4mOnly two disks\e[0m are allowed here.         *"
+echo -e "\t*   \e[1mRAID 5\e[0m:  \e[4mA minumum of three disks\e[0m is required.    *"
+echo -e "\t*                                                     *"
+echo -e "\t*   The script will force you to choose disks         *"
+echo -e "\t*   if you have more disks available in the machine.  *"
+echo -e "\t*=====================================================*"
+
+
 WIPE=${WIPE-0}			# Do not wipe available sd disks unless invoked otherwise
 RAID=${RAID-5} 			# RAID type (defaults to RAID 5)
 case $RAID in
@@ -40,8 +58,8 @@ esac
 EFI=0 					# Is it going to be an EFI setup? 
  						# Checked later and modified accordingly.
 
-function wipe_disks () { true;
-		#dd if=/dev/urandom of=$DEV
+function wipe_disk () { 
+	echo -e "\tdd if=/dev/urandom of=/dev/${1}"; 
 }
 function usb_in () {
 	echo $(ls -l /sys/block|grep usb|wc -l)
@@ -65,11 +83,12 @@ echo -e "\tNumber of disks available = ${NODA}"
 echo -e "\tAvailable 'sd' disks:  \e[1m${DISKS}\e[0m\n"
 
 #NODR=3 							# Just for testing
-#NODA=5 							# Just for testing
-#DISKS="sda sdb sdc sdd sde" 	# Just for testing
+NODA=5 							# Just for testing
+DISKS="sda sdb sdc sdd sde" 	# Just for testing
 #echo Testing NODR=$NODR
-#echo Testing NODA=$NODA
-#echo Testing DISKS=$DISKS
+echo Testing NODA=$NODA
+echo Testing DISKS=$DISKS
+echo ""
 
 #---NOT ENOUGH DISKS------------------------------------------
 if [[ $NODA -lt $NODR ]]; then
@@ -82,26 +101,34 @@ if [[ $NODA -gt $NODR ]]; then 		# Choose disks to be used by RAID
 	echo -e "Number of disks available is larger than that required."
 	for ((cont=1; ((cont)); )); do
 		echo -e "Disks available:  \e[1m${DISKS}\e[0m"
-		AVA=$NODA
+		AVA=$NODA; NODC=0;
 		CHOSEN=" $DISKS"
 		for DEV in $DISKS; do
-			echo -ne "Shall \e[1m${DEV}\e[0m be used?  (Y/n/a)   "
-			read -srn1 Q
-			[[ $Q == [yY] || $Q == "" || $Q == [aA] ]] && echo "Yes" || { echo "No"; 
-				CHOSEN=${CHOSEN/" $DEV"/}; ((((--AVA))-NODR)) || break;}
-			[[ $Q == [aA] ]] && { CHOSEN=${DISKS}; AVA=$NODA; 
-				echo -e "\r\e[1mUse them all\e[0m               "; break;}
+			if [[ $RAID == 5 ]]; then
+				echo -ne "Shall \e[1m${DEV}\e[0m be used?  (Y/n/a)   "
+				IFS= read -srn1 Q
+				[[ $Q == [yY] || $Q == "" || $Q == [aA] ]] && echo "Yes" || { echo "No"; 
+					CHOSEN=${CHOSEN/" $DEV"/}; ((((--AVA))-NODR)) || break;}
+				[[ $Q == [aA] ]] && { CHOSEN=${DISKS}; AVA=$NODA; 
+					echo -e "\r\e[1mUse them all\e[0m               "; break;}
+			else
+				echo -ne "Shall \e[1m${DEV}\e[0m be used?  (Y/n)   "
+				IFS= read -srn1 Q
+				[[ $Q == [yY] || $Q == "" ]] && { echo "Yes";
+					((NODR-((++NODC)))) || { CHOSEN=${CHOSEN%${DEV}*}${DEV}; break;};} || 
+					{ echo "No"; CHOSEN=${CHOSEN/" $DEV"/}; 
+						((((--AVA))-NODR)) || { NODC=$AVA; break;};}
+			fi
 		done
 		CHOSEN=${CHOSEN# }
-		NODC=$AVA
-
+		[[ $RAID == 5 ]] && NODC=$AVA
 		echo -e "The chosen disks:  \e[1m${CHOSEN}\e[0m"
 		echo -e "\tContinue? (\e[1mC\e[0m|\e[1m<enter>\e[0m)"
 		echo -e "\tChoose a different set of disks? (\e[1mD\e[0m)"
 		echo -e "\tAbort? (\e[1mA\e[0m)"
 		Q="z"
 		until [[ $Q == [cC] || $Q == "" || $Q == [aA] || $Q == [dD] ]]; do
-			read -rsn1 Q
+			IFS= read -rsn1 Q
 		done
 		if [[ $Q == [cC] || $Q == "" ]]; then
 			echo " "
@@ -126,16 +153,17 @@ if [[ $WIPE -gt 0 ]]; then
 	echo -e "This operation may take hours.\e[0m\n"
 	for ((t=120;--t;)) {
 		echo -en "\rContinue?  (y/N)  [\e[33m$t\e[0m sek] "
-		read -rsn1 -t1 Q && break
+		IFS= read -rsn1 -t1 Q && break
 	}
 	if [[ "$Q" != [Yy] || "$Q" == "" ]]; then
 		echo -e "\rAborted.                   "
 		exit 22
 	fi
 	echo -e "\nThen go and have a bucket of coffee."
-	for DEV in "$DISKS"; do
-		echo -e "Wiping ${DEV}..."
-		echo -e "\e[1mNOT REALLY. Just joking! Wipe 'em manually!\e[0m"
+	echo -e "\e[1mNOT REALLY. Just joking! Wipe 'em manually!\e[0m" 	# Testing
+	for DEV in $DISKS; do
+		echo -e "\tWiping ${DEV}..."
+        wipe_disk ${DEV}
 	done;
 	echo -e "Disk(s) cleaned.\n"
 fi
@@ -146,9 +174,9 @@ if [[ $WIPE -eq 0 ]]; then 		# No need to warn when disks have been wiped.
 	echo -e "The chosen disks (${CHOSEN}) are about to be partitioned."
 	for ((t=120;--t;)) {
 		echo -en "\rContinue?  (Y/n)  [\e[33m$t\e[0m sek] "
-		read -rsn1 -t1 Q && break
+		IFS= read -rsn1 -t1 Q && break
 	}
-	if [[ "$Q" != [yY] && "$Q" != "" ]]; then
+	if [[ "$Q" != [yY] && "x$Q" != "x" ]]; then
 		echo -e "\rAborted.                   "
 		exit 23
 	fi
@@ -157,7 +185,7 @@ fi
 
 #---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
 [[ -d /sys/firmware/efi/efivars ]] && EFI=1
-echo -e "You are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment.\n"
+echo -e "\rYou are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment.\n"
 
 
 #---INSTALL GPTFDISK IN NECESSARY (should be already there)----
@@ -191,7 +219,8 @@ echo -e "\nFree disk-surface space for partitioning:"
 for DEV in $CHOSEN; do
 	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
 	s=${x% *}; u=${x#* }
-	case u in 					# Convert into GiB
+s=2.5; u="TiB"	# Testing
+	case $u in 			 				# Convert into GiB
 		MiB) s=$(echo "scale=1; $s / 1024" |bc);;
 		TiB) s=$(echo "scale=1; $s * 1024" |bc);;
 	esac
@@ -201,11 +230,10 @@ for DEV in $CHOSEN; do
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
 done
 echo -e "The samllest disk area for assembling RAID: \e[1m${s0} GiB\e[0m."
-echo "SIZES=(${SIZES})" 		# Testing
+echo "Testing:  SIZES=(${SIZES})" 		# Testing
 
 exit 	# Testing
 
-# INTERACTIVE OR USE A MANUALLY EDITED .conf?
 # REMEMBER EFI PARTITION ON THE FIRST DISK.
 
 # Create partitions for encrypted RAID5. Beware of partition numbers.
