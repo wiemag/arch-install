@@ -195,7 +195,7 @@ for DEV in $CHOSEN; do
 		MiB) s=$(echo "scale=1; $s / 1024" |bc);;
 		TiB) s=$(echo "scale=1; $s * 1024" |bc);;
 	esac
-	[[ $DEV == $DEV0 ]] && { s=$(scale=1; echo "$s - $((EFI1?:0))/2"|bc); s0=$s;} # 0.5GiB
+	[[ $DEV == $DEV0 ]] && { s=$(echo "scale=1; $s - $((EFI?1:0))/2"|bc); s0=$s;} # 0.5GiB
 	printf "\t%s: %8.1f GiB\n" $DEV $s
 	SIZES=$SIZES"$DEV $s "
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
