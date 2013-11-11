@@ -45,8 +45,19 @@ echo -e "\t*   \e[1mRAID 5\e[0m:  \e[4mA minumum of three disks\e[0m is required
 echo -e "\t*                                                     *"
 echo -e "\t*   The script will force you to choose disks         *"
 echo -e "\t*   if you have more disks available in the machine.  *"
-echo -e "\t*=====================================================*"
+echo -e "\t*-----------------------------------------------------*"
 
+#---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
+[[ -d /sys/firmware/efi/efivars ]] && EFI=1 || EFI=0
+EFI=1  # Testing
+if [[ $EFI == 0 ]]; then
+	echo -e "\t*   You are \e[1mNOT\e[0m in (U)EFI environment.                *"
+else
+	echo -e "\t*   You \e[1mARE\e[0m in (U)EFI environment.                    *"
+	echo -e "\t*   \e[33mA 512 MiB (0.5 GiB) partition will be created\e[0m     *"
+	echo -e "\t*   \e[33mon the first chosen disk.\e[0m                         *"
+fi
+echo -e "\t*=====================================================*"
 
 WIPE=${WIPE-0}			# Do not wipe available sd disks unless invoked otherwise
 RAID=${RAID-5} 			# RAID type (defaults to RAID 5)
@@ -55,7 +66,7 @@ case $RAID in
 	1) NODR=2;; 		# No of disks required for RAID 1
 	?) usage_raid; echo -e "\nRAID 5 or RAID 1 only"; exit 2
 esac
-EFI=0 					# Is it going to be an EFI setup? 
+ 					# Is it going to be an EFI setup? 
  						# Checked later and modified accordingly.
 
 function wipe_disk () { 
@@ -83,12 +94,12 @@ echo -e "\tNumber of disks available = ${NODA}"
 echo -e "\tAvailable 'sd' disks:  \e[1m${DISKS}\e[0m\n"
 
 #NODR=3 							# Just for testing
-NODA=5 							# Just for testing
-DISKS="sda sdb sdc sdd sde" 	# Just for testing
-#echo Testing NODR=$NODR
-echo Testing NODA=$NODA
-echo Testing DISKS=$DISKS
-echo ""
+#NODA=5 							# Just for testing
+#DISKS="sda sdb sdc sdd sde" 	# Just for testing
+#echo -e "\e[32;1mTesting NODR=$NODR \e[0m"
+#echo -e "\e[32;1mTesting NODA=$NODA \e[0m"
+#echo -e "\e[32;1mTesting DISKS=$DISKS \e[0m"
+#echo ""
 
 #---NOT ENOUGH DISKS------------------------------------------
 if [[ $NODA -lt $NODR ]]; then
@@ -143,8 +154,8 @@ else
 	NODC=$NODA 							# Number of disks chosen for RAID
 fi
 
-#echo Testing CHOSEN=$CHOSEN 	# Just for testing
-#echo Testing NODC=$NODC 		# Just for testing
+#echo -e "\e[32;1mTesting  CHOSEN=$CHOSEN \e[0m" 	# Just for testing
+#echo -e "\e[32;1mTesting  NODC=$NODC \e[0m"			# Just for testing
 
 #---WIPE CHOSEN DISKS (OPTIONAL)------------------------------
 if [[ $WIPE -gt 0 ]]; then
@@ -171,7 +182,7 @@ fi
 
 #---LAST WARNING BEFORE PARTITIONING (NOT NEEDED IF WIPED)-----
 if [[ $WIPE -eq 0 ]]; then 		# No need to warn when disks have been wiped.
-	echo -e "The chosen disks (${CHOSEN}) are about to be partitioned."
+	echo -e "The chosen disks (\e[1m${CHOSEN}\e[0m) are about to be partitioned."
 	for ((t=120;--t;)) {
 		echo -en "\rContinue?  (Y/n)  [\e[33m$t\e[0m sek] "
 		IFS= read -rsn1 -t1 Q && break
@@ -183,20 +194,17 @@ if [[ $WIPE -eq 0 ]]; then 		# No need to warn when disks have been wiped.
 fi
 
 
-#---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
-[[ -d /sys/firmware/efi/efivars ]] && EFI=1
-echo -e "\rYou are \e[1m$([[ $EFI = 0 ]] && echo "NOT ")\e[0min (U)EFI environment.\n"
-
-
 #---INSTALL GPTFDISK IN NECESSARY (should be already there)----
 # Install gptfdisk if necessary. (Provides gdisk, cgdisk, sgdisk, fixparts)
 which sgdisk 2>/dev/null 1>/dev/null
-(( $? )) && { echo -e "\tThe gptfdisk package needs to be installed."; 
+(( $? )) && { echo -e "\r                                 ";
+	echo -e "\tThe gptfdisk package needs to be installed."; 
 	sudo pacman -Sy gptfdisk;
 	(( $? )) && { echo "Aborted!"; exit 23;}; }
 
 
 #---CREATING GPT DISK(s) (Both for EFI and MBR)----------------
+echo -e "\r                                 "
 echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo "."
 # Remove previous GPT/MBR data and set alignment.
 # Using "/dev/sd[abc] is not possible.
@@ -214,12 +222,13 @@ if [[ $EFI == 1 ]]; then
 	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0}
 fi
 
+
+#---CREATE PARTITIONS FOR RAID: SIZE---------------------------
 echo -e "\nFree disk-surface space for partitioning:"
 ((EFI)) && echo There is a 0.5 GiB EFI partition on ${DEV0}.
 for DEV in $CHOSEN; do
 	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
 	s=${x% *}; u=${x#* }
-s=2.5; u="TiB"	# Testing
 	case $u in 			 				# Convert into GiB
 		MiB) s=$(echo "scale=1; $s / 1024" |bc);;
 		TiB) s=$(echo "scale=1; $s * 1024" |bc);;
@@ -230,30 +239,35 @@ s=2.5; u="TiB"	# Testing
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
 done
 echo -e "The samllest disk area for assembling RAID: \e[1m${s0} GiB\e[0m."
-echo "Testing:  SIZES=(${SIZES})" 		# Testing
 
-exit 	# Testing
+#echo "Testing:  SIZES=(${SIZES})" 		# Testing
 
-# REMEMBER EFI PARTITION ON THE FIRST DISK.
-
-# Create partitions for encrypted RAID5. Beware of partition numbers.
+#---CREATE PARTITIONS FOR RAID---------------------------------
 # It is possible to clone partitions with sgdisk (--backup/--load-backup)
-sgdisk -a 2048 -n 2:0:-16M -t 2:fd00 -c 2:RAID5 /dev/sda
-sgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:RAID5 /dev/sdb
-sgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:RAID5 /dev/sdc
+i=0; x="RAID${RAID}"
+echo -e "\nCreate partitions for ${x}:"
+echo THIS IS WRONG!!! THE MINIMUM COMMON FREE SIZE HAS TO BE USED!!! UNLESS...
+for DEV in ${CHOSEN}; do
+	((i++)) && echo -e "\tsgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:$x /dev/${DEV}" || 
+	echo -e "\tsgdisk -a 2048 -n $((1+EFI)):0:-16M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}"
+done
 
 # Check the partitions
 #for DEV in $CHOSEN; do
 #	sgdisk -p /dev/${DEV}
 #done
 
+exit 	# Testing
+
 # Prepare partitions for the creation of a RAID5 device
 modprobe raid5
 #modprobe dm-mod  # already there
 # mdadm --zero-superblock /dev/<drive>
-# partprobe -s  # verify 
+echo -e "\nVerify disk partitions:"
+echo -e "\tpartprobe -s /dev/sd*"
+
 for DEV in $CHOSEN; do
-	hdparm -W 0 /dev/${DEV} 	# Disable the disk write cache
+	echo hdparm -W 0 /dev/${DEV} 	# Disable the disk write cache
 done
 
 # Create a RAID5 device
