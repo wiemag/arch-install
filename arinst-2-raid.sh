@@ -2,8 +2,12 @@
 # by Wiesław Magusiak
 #
 
-VERSION=0.91
+VERSION=0.92
 #f=${0%.sh} 				# CONF=${f}.conf # If conf were to be used.
+
+(( $USER == "wm" )) || { echo -e "\n\e[31;1mNot here, my Lord and Master.";
+	echo -e "The script does do actual and irreversable modifications to the disks.\e[0m"; 
+	exit;}
 
 function usage_raid () {
 echo -e "\n\e[32;1m${0##*/} (ver.$VERSION)\e[0m"
@@ -49,7 +53,7 @@ echo -e "\t*-----------------------------------------------------*"
 
 #---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
 [[ -d /sys/firmware/efi/efivars ]] && EFI=1 || EFI=0
-EFI=1  # Testing
+#EFI=1  # Testing
 if [[ $EFI == 0 ]]; then
 	echo -e "\t*   You are \e[1mNOT\e[0m in (U)EFI environment.                *"
 else
@@ -69,8 +73,8 @@ esac
  					# Is it going to be an EFI setup? 
  						# Checked later and modified accordingly.
 
-function wipe_disk () { 
-	echo -e "\tdd if=/dev/urandom of=/dev/${1}"; 
+function wipe_disk () { true;
+	# dd if=/dev/urandom of=/dev/${1}; 
 }
 function usb_in () {
 	echo $(ls -l /sys/block|grep usb|wc -l)
@@ -174,7 +178,8 @@ if [[ $WIPE -gt 0 ]]; then
 	echo -e "\e[1mNOT REALLY. Just joking! Wipe 'em manually!\e[0m" 	# Testing
 	for DEV in $DISKS; do
 		echo -e "\tWiping ${DEV}..."
-        wipe_disk ${DEV}
+		echo -e "\tdd if=/dev/urandom of=/dev/${1}"; 
+        wipe_disk ${DEV} 					# ACTUAL WIPING! SEE wipe_disk function
 	done;
 	echo -e "Disk(s) cleaned.\n"
 fi
@@ -208,9 +213,11 @@ echo -e "\r                                 "
 echo -n "Creating GPT partition table"; [[ $NOC -gt 1 ]] && echo "s." || echo "."
 # Remove previous GPT/MBR data and set alignment.
 # Using "/dev/sd[abc] is not possible.
-for DEV in $CHOSEN; do
-	echo -e "\tsgdisk -Z /dev/${DEV}" 			# Destroy MBR and GPT data (clean the disk)
-	echo -e "\tsgdisk -a 2048 -o /dev/${DEV}" 	# Clear out all partition data; -a sets alignment
+for DEV in $CHOSEN; do 				# ACTUAL DISKS MODIFICATIONS!!!!
+	echo -e "\tsgdisk -Z /dev/${DEV}"
+	sgdisk -Z /dev/${DEV} 			# Destroy MBR and GPT data (clean the disk)
+	echo -e "\tsgdisk -a 2048 -o /dev/${DEV}"
+	sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
 done 									# in In fact, 2048 is the default
 
 #---Create "EFI" partition (512MiB, vfat, label EFI)-----------
@@ -220,39 +227,46 @@ if [[ $EFI == 1 ]]; then
 	[[ $DEV0 != "sda" ]] && 
 		echo -e "\e[1mWarning!\e[0m The EFI partition should be on /dev/sda."
 	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0}
+	sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0} 	# ACTUAL DISKS MODIFICATIONS!!!!
 fi
 
 
 #---CREATE PARTITIONS FOR RAID: SIZE---------------------------
-echo -e "\nFree disk-surface space for partitioning:"
-((EFI)) && echo There is a 0.5 GiB EFI partition on ${DEV0}.
+((EFI)) && echo -e "\nThere is a 0.5 GiB EFI partition on ${DEV0}."
+echo "Free disk-surface space for partitioning:"
 for DEV in $CHOSEN; do
-	x=$(sgdisk -p /dev/${DEV} | head -1|awk '{print $5" "$6 }')
-	s=${x% *}; u=${x#* }
-	case $u in 			 				# Convert into GiB
-		MiB) s=$(echo "scale=1; $s / 1024" |bc);;
-		TiB) s=$(echo "scale=1; $s * 1024" |bc);;
-	esac
-	[[ $DEV == $DEV0 ]] && { s=$(echo "scale=1; $s - $((EFI?1:0))/2"|bc); s0=$s;} # 0.5GiB
-	printf "\t%s: %8.1f GiB\n" $DEV $s
-	SIZES=$SIZES"$DEV $s "
+	x=$(cat /sys/block/${DEV}/size) 	# Size in sectors.
+	y=$(blockdev --getss /dev/${DEV})		# Logical sector size.
+	s=$(echo "$x * $y / 1024 / 1024"|bc)
+	#s=$((x * y / 1024 / 1024))
+	u="MiB"
+	s=${s%.*}
+	[[ $DEV == $DEV0 ]] && { s=$(($s - $((EFI?1:0))*512)); s0=$s;} # 512 MiB
+	printf "\t%s: %14d MiB  %9.1f GiB\n" $DEV $s $(echo "scale=2; $s / 1024" |bc)
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
 done
-echo -e "The samllest disk area for assembling RAID: \e[1m${s0} GiB\e[0m."
+echo -ne "The samllest disk area for assembling RAID: \e[1m${s0} MiB\e[0m "
+echo -e "($(echo "scale=2; $s0 / 1024" |bc) GiB\e[0m)."
+echo -ne "\e[32mDecrease the smallest size by 17 MiB "
+echo -e "(1 at the beginning, 16 at the end).\e[0m"
+s0=$((s0 - 17))
 
-#echo "Testing:  SIZES=(${SIZES})" 		# Testing
 
 #---CREATE PARTITIONS FOR RAID---------------------------------
 # It is possible to clone partitions with sgdisk (--backup/--load-backup)
+# sgdisk does not accept floating point numbers for partition size!
 i=0; x="RAID${RAID}"
 echo -e "\nCreate partitions for ${x}:"
-echo THIS IS WRONG!!! THE MINIMUM COMMON FREE SIZE HAS TO BE USED!!! UNLESS...
 for DEV in ${CHOSEN}; do
-	((i++)) && echo -e "\tsgdisk -a 2048 -n 1:0:-16M -t 1:fd00 -c 1:$x /dev/${DEV}" || 
-	echo -e "\tsgdisk -a 2048 -n $((1+EFI)):0:-16M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}"
+	((i++)) && echo -e "\tsgdisk -a 2048 -n 1:0:+${s0}M -t 1:fd00 -c 1:$x /dev/${DEV}" || 
+	echo -e "\tsgdisk -a 2048 -n $((1+EFI)):0:+${s0}M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}"
+	((i--))
+	((i++)) && sgdisk -a 2048 -n 1:0:+${s0}M -t 1:fd00 -c 1:$x /dev/${DEV} || 
+	sgdisk -a 2048 -n $((1+EFI)):0:+${s0}M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}
 done
 
 # Check the partitions
+echo -e "\n\e[32mRun \e[1;32msgdisk -p /dev/sd*\e[0;32m to see all the partitions.\e[0m"
 #for DEV in $CHOSEN; do
 #	sgdisk -p /dev/${DEV}
 #done
@@ -261,7 +275,7 @@ exit 	# Testing
 
 # Prepare partitions for the creation of a RAID5 device
 modprobe raid5
-#modprobe dm-mod  # already there
+modprobe dm-mod  # already there
 # mdadm --zero-superblock /dev/<drive>
 echo -e "\nVerify disk partitions:"
 echo -e "\tpartprobe -s /dev/sd*"
