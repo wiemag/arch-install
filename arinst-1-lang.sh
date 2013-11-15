@@ -33,7 +33,7 @@ do
 		k) KB="$OPTARG";
 			[[ -z $(ls /usr/share/kbd/keymaps/i386/*/${KB}.map.gz 2>/dev/null) ]] && 
 				{ usage; echo -e "\tKeyboard layout \e[1m${KB}\e[0m not found.\n"; exit;} || 
-				loadkeys $KB 1>/dev/null;;
+				{ loadkeys $KB 1>/dev/null; localectl set-keymap --no-convert ${KB};};;
 		f) FONT="$OPTARG";
 			[[ ! -f /usr/share/kbd/consolefonts/${FONT}.psfu.gz ]] && 
 				{ usage_arinst-1-lang; 
