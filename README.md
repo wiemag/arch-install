@@ -13,8 +13,9 @@ Note that arch linux installation media run in zsh shell.
 
 The scripts names suggest the order of use.
 
-- arch-1-lang.sh
-- arch-2-raid.sh
+- ari-1-lang.sh
+- ari-2-raid.sh
+- ari-3-luks.sh
 
 	WARNING!
 
@@ -27,21 +28,23 @@ USAGE
 
 (1) Download a given script from here
 
-	curl -o arinst-1-lang.sh -L https://raw.github.com/wiemag/arch-install/master/arinst-1-lang.sh
+	curl -o ari-1-lang.sh -L https://raw.github.com/wiemag/arch-install/master/ari-1-lang.sh
 
-	curl -o arinst-2-raid.sh -L https://raw.github.com/wiemag/arch-install/master/arinst-2-raid.sh
+	curl -o ari-2-raid.sh -L https://raw.github.com/wiemag/arch-install/master/ari-2-raid.sh
+
+	curl -o ari-3-luks.sh -L https://raw.github.com/wiemag/arch-install/master/ari-3-luks.sh
 
 (2) Change permissions for the script to be executable
 
 	chmod a+x arinst-*
 
-(3) Run them with "-h" flag first to see available options
+(3) Run them without any parameters/flag first to see available options
 
-	./arinst-1-lang.sh -h
+	./arinst-1-lang.sh
 
 or through bash
 
-	bash arch-1-lang.sh -h
+	bash arch-1-lang.sh
 
 (4) Run them with chosen options, e.g.
 
@@ -50,6 +53,3 @@ or through bash
 NEVER RUN THESE SCRIPTS ON YOUR COMPUTER!!!
 
 YOU MAY TRY THEM IN A VIRTUAL MACHINE
-
-AT THE MOMENT NONE OF THE SCRIPT WORKS!!!
-
