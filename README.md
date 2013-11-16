@@ -13,9 +13,10 @@ Note that arch linux installation media run in zsh shell.
 
 The scripts names suggest the order of use.
 
-- ari-1-lang.sh
-- ari-2-raid.sh
-- ari-3-luks.sh
+- ari-1-lang.sh 	(Does not work under Virtual box)
+- ari-2-raid.sh 	(Works)
+- ari-3-luks.sh 	(Works)
+- ari-4-lvm.sh  	(Being written)
 
 	WARNING!
 
@@ -36,19 +37,19 @@ USAGE
 
 (2) Change permissions for the script to be executable
 
-	chmod a+x arinst-*
+	chmod a+x ari-*
 
 (3) Run them without any parameters/flag first to see available options
 
-	./arinst-1-lang.sh
+	./ari-1-lang.sh
 
 or through bash
 
-	bash arch-1-lang.sh
+	bash ari-1-lang.sh
 
 (4) Run them with chosen options, e.g.
 
-	bash arinst-1-lang.sh -k pl -f lat2-16 -l pl_PL.UTF-8
+	bash ari-1-lang.sh -k pl -f lat2-16 -l pl_PL.UTF-8
 
 NEVER RUN THESE SCRIPTS ON YOUR COMPUTER!!!
 
