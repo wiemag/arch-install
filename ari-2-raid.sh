@@ -2,12 +2,17 @@
 # by Wiesław Magusiak
 #
 
-VERSION=0.93 					# A crude but working version
+VERSION=0.94 					# A working version
 LOG=${0%.sh}.log 				# A log in the current directory
+pSIZE_efi=512 					# (U)EFI partition default size in MiB
+pSIZE_boot=112 					# Boot partition default size
+[[ -d /sys/firmware/efi/efivars ]] && { 
+	EFI=1; pN="EFI"; pT="ef00"; 	# (pN) Partition name; (pT) partition type
+} || { 
+	EFI=0; pN="boot"; pT="8300";
+}
 KROK=1
 
-# TODO:  Modify the script by assing another flag to control whether a boot/EFI partition
-# is to be created on the first disk of those chosen for a RAID.
 # TODO:  Hava a look to find whether it is possible to replace greps with awks.
 
 # Dependencies: grep [grep], awk [gawk], sed [sed], cut [coreutils], tee [coreutils]
@@ -15,37 +20,84 @@ KROK=1
 
 function usage_raid () {
 echo -e "\n\e[32;1m${0##*/} (ver.$VERSION)\e[0m"
-echo -e "The script partitions (and wipes if so invoked) disks for RAID installation"
-echo -e "calculates the available maximum size for RAID and assembles the array."
-echo -e "\e[32;1mIt will remove MBRs/GPTs of chosen disks and creat new ones!\e[0m\n"
+echo -e "The script partitions (and wipes if so invoked) disks for RAID installation,"
+echo -e "calculates the available maximum size for RAID, and assembles the array."
+echo -e "\e[31;1mWARNING!"
+echo -e "\e[32;1m\tIt will remove MBRs/GPTs from chosen disks and create new ones!\e[0m\n"
 echo "Usage:"
-echo -e "\t\e[1m${0##*/}\e[0m [\e[1m-r\e[0m \e[4mRAID_type\e[0m] [\e[1m-w\e[0m]"
+echo -ne "\t\e[1m${0##*/}\e[0m [\e[1m-r\e[0m \e[4mRAID_type\e[0m] "
+echo -e "[\e[1m-w\e[0m] [\e[1m-p\e[0m \e[4mSIZE\e[0m]"
 echo "Where:"
-echo -ne "\t\e[1mRAID_type\e[0m is the RAID level and can be 5 or 1 only; "
-echo -e "\e[1mDefaults to 5\e[0m."
-echo -e "\t\e[1m'-w'\e[0m tells the script to \e[1mwipe the disks\e[0m before partitioning."
+echo -e "\t\e[1mRAID_type\e[0m is the RAID level and can be 5 (default) or 1 only."
+echo -e "\t\e[1m-w\e[0m tells the script to \e[1mwipe the disks\e[0m before partitioning."
+echo -e "\t\e[1m-p SIZE\e[0m tells the script to \e[1mcreate boot/EFI partition\e[0m"
+echo -e "\t   the size of \e[1m\$SIZE MiB\e[0m on the first of the chosen disks."
+echo -ne "\t   The boot and EFI partitions' default sizes"
+echo -e " are \e[1m${pSIZE_boot}\e[0m and \e[1m${pSIZE_efi} MiB\e[0m.\n"
+echo -e "\e[32mIf the '-p' option is not used, a default size boot/EFI partition is made."
+echo -e "The zero size tells the script not to create the boot/EFI partition at all.\n"
+echo -e "A boot or EFI partition is chosen automatically depending on the environment.\e[0m\n"
+}
+function wipe_disk () { true;
+	# dd if=/dev/urandom of=/dev/${1}; 
+}
+function usb_in () { 	# Function not used; Shows if any usb drives are put in.
+	echo $(ls -l /sys/block|grep usb|wc -l)
+}
+function disks_available {
+	DISKS=""; j=0
+	for DEV in /sys/block/sd*; do
+		(( $(<${DEV}/removable) )) || { DISKS=${DISKS}" "${DEV##*/}; ((j++));}
+	done
+	echo ${j}${DISKS} 		# No of non-removable disks available and their names
+}
+function press_a_key () {
+	echo -ne "Press a key for more information."
+	read -rsn1
+}
+
+#---ROOT REQUIRED, DON'T TRY IT AT HOME-----------------------
+[[ $USER == "root" ]] || { echo -e "\n\e[31;1mDon't try it at home.";
+	echo -e "The script makes major and irreversible modifications to the disks.";
+	echo -e "It can only be run by root.\e[0m"; 
+	usage_raid;
+	exit 20;
 }
 
 
-[[ $USER == "root" ]] || { echo -e "\n\e[31;1mDon't try it at home.";
-	echo -e "The script makes major and irreversible modifications to the disks.";
-	echo -e "It can only be run by root.\e[0m"; usage_raid;
-	exit 20;}
+#---INSTALLATION PARAMETERS/OPTIONS---------------------------
+while getopts "r:wp:h" flag; do
+	case "$flag" in
+		r) RAID="$OPTARG";; 		# RAID type
+		w) WIPE=1;; 				# WIPE DISKS
+		p) pSIZE="$OPTARG";; 		# If zero, no boot/EFI partition will be created.
+		h|?) usage_raid; exit 20;;
+	esac
+done
 
 usage_raid
+
+shift $((OPTIND-1))
+(($#)) && {  
+	echo -e "A stray option found: \"\e[1m${1}\e[0m\".\nWhat is it?\n"; 
+	exit 21;
+}
+
+
+#---START A LOG-----------------------------------------------
 echo -e "${0##*/}.log, $(date +"%Y-%m-%d %H:%M:%S")\n" > ${LOG}
 
 
 #---BEFORE WE START (ARE THERE ANY RAIDs DEFINED/ACTIVE)------
 # Assumption is made that there is only one RAID defined.
-echo -ne "\n\e[34;1m"
+echo -ne "\e[34;1m"
 echo -e "(${KROK})\tChecking if there are any RAID devices defined." | tee -a $LOG
 echo -ne "\e[0m"
 #partprobe -s /dev/sd* 1>/dev/null 	# This should start RAIDs if they aren't active already.
 if [[ $(mdadm -E --scan|wc -l) -gt 0 ]]; then
 	echo -e "\e[31;1mYes, there are. They all will be removed!\e[0m"
 	echo "Continue?  (Y/n)  "; IFS= read -srn1 Q
-	[[ $Q != [yY] && $Q != "" ]] && exit 20
+	[[ $Q != [yY] && $Q != "" ]] && exit 22
 	DEV=$(mdadm -D --scan|cut -d" " -f2)
 	if [[ $(echo $DEV | wc -w) -gt 0 ]]; then 				# It must be "-w" here!
 		DEV=${DEV/\/0/0}
@@ -82,36 +134,33 @@ if (($?)); then
 	echo -ne "\e[0m"
 	echo -e "Bash calculator is needed for this script to run."
 	echo -ne "Running:  \e[1m"; echo "pacman -Sy bc" | tee -a ${LOG}; echo -ne "\e[0m"
-	pacman -Sy bc
+	pacman -Sy --noconfirm bc
 	(($?)) && { echo "Aborted." | tee -a ${LOG}; exit 28;}
 fi
 
 
-#---INSTALLATION PARAMETERS/OPTIONS---------------------------
-while getopts  "r:wh" flag
-do
-	case "$flag" in
-		r) RAID="$OPTARG";; 		# RAID type
-		w) WIPE=1;; 				# WIPE DISKS
-		h) usage_raid; exit 20;;
-	esac
-done
-
-
 #---CHECK IF YOU ARE IN EFI ENVIRONMENT------------------------
-[[ -d /sys/firmware/efi/efivars ]] && EFI=1 || EFI=0
 #EFI=1  # Testing
 let KROK+=1
 echo -ne "\e[34;1m"
 if [[ $EFI == 0 ]]; then
 	echo -e "\n(${KROK})\tYou are NOT in (U)EFI environment." | tee -a $LOG
+	pSIZE=${pSIZE-$pSIZE_boot}
 else
 	echo -e "\n(${KROK})\tYou ARE in (U)EFI environment." | tee -a $LOG
 	echo -ne "\e[0m\e[33m"
-	echo -e "\tA 512 MiB (0.5 GiB) partition will be created" | tee -a $LOG
-	echo -e "\ton the first chosen disk." | tee -a $LOG
+	pSIZE=${pSIZE-$pSIZE_efi}
 fi
 echo -ne "\e[0m"
+
+if [[ $pSIZE -gt 0 ]]; then
+	echo -ne "\tA ${pSIZE}-MiB ${pN} partition will be created " | tee -a $LOG
+	echo -e "on the first chosen disk." | tee -a $LOG
+	EB=1 	# There EFI or BOOT = YES
+else
+	echo -e "\tNo extra boot/EFI partitions will be created." | tee -a $LOG
+	EB=0 	# There EFI or BOOT = NO
+fi
 
 
 #---INFORMATION ON RAID LEVELS SUPPORTED BY THIS SCRIPT-------
@@ -134,28 +183,17 @@ case $RAID in
 	1) NODR=2;modprobe raid1;; 		# No of disks required for RAID 1
 	?) usage_raid; echo -e "RAID 5 or RAID 1 only" | tee -a ${LOG}; exit 21;;
 esac
- 					# Testing:  Is it going to be an EFI setup? 
- 					# Testing:  To be checked later and modified accordingly.
 
-function wipe_disk () { true;
-	# dd if=/dev/urandom of=/dev/${1}; 
-}
-function usb_in () { 	# Not used; Shows if any usb drives are put in.
-	echo $(ls -l /sys/block|grep usb|wc -l)
-}
-function disks_available {
-	DISKS=""; j=0
-	for DEV in /sys/block/sd*; do
-		(( $(<${DEV}/removable) )) || { DISKS=${DISKS}" "${DEV##*/}; ((j++));}
-	done
-	echo ${j}${DISKS} 		# No of non-removable disks available and their names
-}
+
+echo | tee -a ${LOG}
+press_a_key
+echo -ne "\r                                 \r"
 
 
 #---INSTALLATION PARAMETERS-----------------------------------
 let KROK+=1
 echo -ne "\e[34;1m"
-echo -e "\n(${KROK})\tInstallation parameters." | tee -a ${LOG}
+echo -e "(${KROK})\tInstallation parameters." | tee -a ${LOG}
 echo -ne "\e[0m\e[1m"
 echo -e "\n\tRAID type ${RAID}" | tee -a ${LOG}
 echo -ne "\e[0m"
@@ -280,12 +318,13 @@ which sgdisk 2>/dev/null 1>/dev/null
 	echo -ne "\e[34;1m";
 	echo -e "\n(${KROK})\tThe gptfdisk package needs to be installed." | tee -a ${LOG};
 	echo -ne "\e[0m";
-	sudo pacman -Sy gptfdisk;
+	sudo pacman -Sy --noconfirm gptfdisk;
 	(( $? )) && { echo "Aborted!" | tee -a ${LOG}; exit 23;}; }
 
 
 #---CREATING GPT DISK(s) (Both for EFI and MBR)----------------
 let KROK+=1
+echo >> ${LOG} 
 echo -e "\e[34;1m\r                                 "
 echo -e "(${KROK})\tCreating GPT disks." | tee -a ${LOG}
 echo -e "\e[0m"
@@ -298,22 +337,22 @@ for DEV in $CHOSEN; do 				# ACTUAL DISKS MODIFICATIONS!!!!
 	sgdisk -a 2048 -o /dev/${DEV} 	# Clear out all partition data; -a sets alignment
 done 								# in In fact, 2048 is the default
 
-#---Create "EFI" partition (512MiB, vfat, label EFI)-----------
+#---CREATE BOOT/EFI PARTITION----------------------------------
 DEV0=${CHOSEN%% *}
-if [[ $EFI == 1 ]]; then
+if [[ $pSIZE -gt 0 ]]; then
 	let KROK+=1
 	echo -ne "\e[34;1m"
-	echo -e "\n(${KROK})\tCreating a 512-MiB EFI partition on ${DEV0}." | tee -a ${LOG}
+	echo -e "\n(${KROK})\tCreating a ${pSIZE}-MiB ${pN} partition on ${DEV0}." | tee -a ${LOG}
 	echo -ne "\e[0m"
-	[[ $DEV0 != "sda" ]] && 
+	[[ $PART0 != "sda" && $EFI == 1 ]] && 
 		echo -e "\e[1mWarning!\e[0m The EFI partition should be on /dev/sda."
-	echo sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0} | tee -a ${LOG}
-	sgdisk -n 1:0:+512M -t 1:ef00 -c 1:EFI /dev/${DEV0} 	# ACTUAL DISKS MODIFICATIONS!!!!
+	echo sgdisk -n 1:0:+${pSIZE}M -t 1:${pT} -c 1:${pN} /dev/${DEV0} | tee -a ${LOG}
+	sgdisk -n 1:0:+${pSIZE}M -t 1:${pT} -c 1:${pN} /dev/${DEV0} # ACTUAL DISKS MODIFICATIONS!
 fi
 
 
 #---CREATE PARTITIONS FOR RAID: SIZE---------------------------
-((EFI)) && echo -e "\nThere is a 0.5 GiB EFI partition on ${DEV0}."
+((pSIZE)) && echo -e "\nThere is a ${pSIZE}-MiB ${pN} partition on ${DEV0}."
 let KROK+=1
 echo -ne "\e[34;1m"
 echo -e "\n(${KROK})\tFree disk-surface space for partitioning:" | tee -a ${LOG}
@@ -325,7 +364,7 @@ for DEV in $CHOSEN; do
 	#s=$((x * y / 1024 / 1024))
 	u="MiB"
 	s=${s%.*}
-	[[ $DEV == $DEV0 ]] && { s=$(($s - $((EFI?1:0))*512)); s0=$s;} # 512 MiB
+	[[ $DEV == $DEV0 ]] && { s=$(($s - $((pSIZE?1:0))*$pSIZE)); s0=$s;} # Minus $pSIZE MiB
 	printf "%s: %14d MiB  %9.1f GiB\n" $DEV $s $(echo "scale=2; $s / 1024" |bc) | tee -a $LOG
 	(($(echo "$s < $s0"|bc))) && s0=$s 	# s0 is the smallest free disk-surface on the disks
 done
@@ -350,12 +389,12 @@ echo -ne "\e[34;1m"
 echo -e "\n(${KROK})\tCreating partitions for ${x}:" | tee -a ${LOG}
 echo -ne "\e[0m"
 for DEV in ${CHOSEN}; do
-	((i++)) && 
+	((i++)) &&  
 	echo -e "\tsgdisk -a 2048 -n 1:0:+${s0}M -t 1:fd00 -c 1:$x /dev/${DEV}" |tee -a $LOG || 
-	echo -e "\tsgdisk -a 2048 -n $((1+EFI)):0:+${s0}M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}" |tee -a $LOG
+	echo -e "\tsgdisk -a 2048 -n $((1+EB)):0:+${s0}M -t $((1+EB)):fd00 -c $((1+EB)):$x /dev/${DEV}" |tee -a $LOG
 	((i--))
 	((i++)) && sgdisk -a 2048 -n 1:0:+${s0}M -t 1:fd00 -c 1:$x /dev/${DEV} || 
-	sgdisk -a 2048 -n $((1+EFI)):0:+${s0}M -t $((1+EFI)):fd00 -c $((1+EFI)):$x /dev/${DEV}
+	sgdisk -a 2048 -n $((1+EB)):0:+${s0}M -t $((1+EB)):fd00 -c $((1+EB)):$x /dev/${DEV}
 done
 
 
@@ -389,16 +428,15 @@ s=" ${CHOSEN}"
 s=${s// sd/ \/dev\/sd}
 s="${s# } "
 s=${s// /1 }
-((EFI)) && s=${s/1/2}
+((EB)) && s=${s/1/2}
 s="${s% } "
 echo -ne "\e[1m"
 echo -ne "mdadm -C /dev/md0 -l${RAID} -n${NODC} --assume-clean ${s}" | tee -a ${LOG}
 echo -e "\e[0m"
 mdadm -C /dev/md0 -l${RAID} -n${NODC} --assume-clean ${s}
+(( $? )) || echo -e "\e[1mA RAID${RAID} has been created and is active.\e[0m"
 echo "cat /proc/mdstat"
 cat /proc/mdstat
 #mdadm -C /dev/md0 -l5 -n3 /dev/sda2 --assume-clean /dev/sd[bc]1
 
-echo -e "\nA RAID${RAID} has been created and is active."
 echo -e "\e[1mA log file has been created. See ${LOG} in the current directory.\e[0m"
-echo "Go on to encrypt it and make lvm2 system."
