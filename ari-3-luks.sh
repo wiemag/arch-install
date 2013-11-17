@@ -2,6 +2,11 @@
 # by Wiesław Magusiak
 VERSION=0.12
 
+echo -e "\n\e[1m${0##*/} (ver. v${VERSION})\e[0m"
+echo -e "The script uses LUKS to format and encrypt a PARTITION with a password,"
+echo "and gives its user some information about available options."
+echo -e "See \e[34;4mhttps://wiki.archlinux.org/index.php/LUKS\e[0m."
+
 PART0=$(cat /proc/mdstat |awk '/active/ {print $1}')
 [[ -z "$PART0" ]] && { 
 	echo -e "\e[31mWarning! There is no active RAID in the machine.\e[0m"; 
@@ -9,15 +14,38 @@ PART0=$(cat /proc/mdstat |awk '/active/ {print $1}')
 	partprobe -s /dev/sd* ;
 	PART0=$(cat /proc/mdstat |awk '/active/ {print $1}')
 	#PART0=$(readlink -f $(mdadm -E --scan 2>/dev/null|awk '{print $2}'));
-	[[ -z "$PART0" ]] && { echo -e "It didn't help.\nAborting."; exit 30;}
+	[[ -z "$PART0" ]] && { echo -e "Still none found.\nAborting."; exit 30;}
 }
 PART0="/dev/${PART0}"
 
+CRYPT=$(file -s $(ls /dev/[sm]*d[0-9]*) | grep 'LUKS')
+if [[ $(echo -e "$CRYPT" | wc -w) -gt 0 ]]; then
+	x=$(echo -e "$CRYPT"|cut -d: -f1)
+	echo -e "\nAvailable LUKS device(s): \e[1m$(echo ${x})\e[0m"
+	echo -e "\nOpen a device or continues to encrypt/format with LUKS."
+	echo -e "\tPress \"o\" to open.\n\tPress \"c\" to format/encrypt"
+	while true; do
+		read -s -n1 Q
+		if [[ $Q == [oO] ]]; then
+			i=$(echo "$x" | wc -w)
+			if [[ $i -gt 1 ]]; then
+				echo "Which device (1, 2,...): $(echo ${x})."
+				echo "Press <ESC> to abort."
+				read -sn1 Q 	# Make sure Q is a number 1..$i
+				for ((k=1;$k<$Q;k++)) { x=${x#* };}
+				for ((k=$i;$k>$Q;k--)) { x=${x% *};}
+			fi
+			cryptsetup luksOpen ${x} luksraid;
+			(($?)) || { echo "${x} was opened and mapped as 'luksraid'."; 
+				lsblk |egrep "disk|part|raid|crypt";
+			} 
+			exit 0
+		fi
+		break 	# Continue the script
+	done
+fi
+
 function usage_crypt () {
-	echo -e "\n\e[1m${0##*/} (ver. v${VERSION})\e[0m"
-	echo -e "The script uses LUKS to format and encrypt a PARTITION with a password,"
-	echo "and gives its user some information about available options."
-	echo -e "See \e[34;4mhttps://wiki.archlinux.org/index.php/LUKS\e[0m."
 	echo -ne "\n\e[1m${0##*/}\e[0m [\e[1m-c\e[0m cypher] [\e[1m-s\e[0m size\e[0m] ["
 	echo -ne "\e[1m-h\e[0m hash] [\e[1m-i\e[0m milisec] [\e[1m-R\e[0m] ["
 	echo -e "\e[1m-n\e[0m NAME] \e[1mPART\e[0m"
