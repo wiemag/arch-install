@@ -1,6 +1,6 @@
 #!/bin/bash
 # by Wiesław Magusiak
-# Configuring language settings: 
+# Configuring language settings:
 # keyboard layout, font, locale (language+charset)
 # It has to work under the zsh shell of arch linux installation medium.
 
@@ -8,7 +8,7 @@ VERSION=0.991
 KB="us"					# Keyboard layout (pl, de, cz, fr, uk, ru...)
 FONT="lat2-16" 			# Font for the language
 LOCALE="en_US.UTF-8"	# Languag locale; see /etc/locale.gen (e.g. pl_PL.UTF-8)
-						# If LOCALE="", set only 
+						# If LOCALE="", set only
 i=0 					# Installation step number
 EFI=0 					# Is it going to be an EFI setup?
 Q="N" 					# A temporary variable used for yes/no question
@@ -33,7 +33,7 @@ do
 		k) KB="$OPTARG";
 			[[ -z $(ls /usr/share/kbd/keymaps/i386/*/${KB}.map.gz 2>/dev/null) ]] && 
 				{ usage; echo -e "\tKeyboard layout \e[1m${KB}\e[0m not found.\n"; exit;} || 
-				{ loadkeys $KB 1>/dev/null; localectl set-keymap --no-convert ${KB};};;
+				{ loadkeys $KB 1>/dev/null; localectl set-keymap ${KB};};;
 		f) FONT="$OPTARG";
 			[[ ! -f /usr/share/kbd/consolefonts/${FONT}.psfu.gz ]] && 
 				{ usage_ari-1-lang; 
@@ -44,8 +44,8 @@ do
 					echo -e "\tLocale \e[1m${LOCALE}\e[0m not listed in /etc/locale.gen.\n"; 
 					exit;} || 
 				{ sed -i s/#"$LOCALE"/"$LOCALE"/ /etc/locale.gen;
-					#export LANG=${LOCALE%% *}; 
-					locale-gen 1>/dev/null; localectl set-locale ${x};};;
+					locale-gen 1>/dev/null; export LANG=${LOCALE}; 
+					localectl set-locale LANG=${LOCALE};};;
 	esac
 done
 
@@ -53,7 +53,7 @@ done
 echo -e "($((++i)))\tKeyboard layout/map \e[1m${KB}\e[0m has been set."
 
 #---SETTING UP THE CONSOLE FONT--------------------------------
-setfont "$FONT" 							# see /usr/share/kbd/consolefonts
+setfont "$FONT" -m 8859-2						# see /usr/share/kbd/consolefonts
 echo -e "($((++i)))\tFont \e[1m${FONT}\e[0m has been set."
 #{LOCALE%%_*}
 
